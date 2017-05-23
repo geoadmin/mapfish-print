@@ -9,6 +9,8 @@ import net.sf.jasperreports.export.SimpleGraphics2DExporterOutput;
 import net.sf.jasperreports.export.SimpleGraphics2DReportConfiguration;
 import org.apache.batik.transcoder.TranscoderException;
 import org.mapfish.print.SvgUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.awt.Color;
 import java.awt.Graphics;
@@ -33,8 +35,9 @@ import javax.media.jai.iterator.RandomIterFactory;
  * CHECKSTYLE:OFF
  */
 public final class ImageSimilarity {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ImageSimilarity.class);
 
-    static final int DEFAULT_SAMPLESIZE = 15;
+    private static final int DEFAULT_SAMPLESIZE = 15;
     // The reference image "signature" (25 representative pixels, each in R,G,B).
     // We use instances of Color to make things simpler.
     private final Color[][] signature;
@@ -42,8 +45,11 @@ public final class ImageSimilarity {
     // The size of the sampling area.
     private int sampleSize = DEFAULT_SAMPLESIZE;
     // values that are used to generate the position of the sample pixels
-    private final float[] prop = new float[]
-            {1f / 10f, 3f / 10f, 5f / 10f, 7f / 10f, 9f / 10f};
+    private static final int COMPARE_SIZE = 50;
+
+    private static float prop(int n) {
+        return (float) ((0.5 + n) / COMPARE_SIZE);
+    }
 
     /**
      * The constructor, which creates the GUI and start the image processing task.
@@ -55,15 +61,25 @@ public final class ImageSimilarity {
     /**
      * The constructor, which creates the GUI and start the image processing task.
      */
+    public ImageSimilarity(BufferedImage referenceImage) throws IOException {
+        this(referenceImage, (int) Math.floor(
+                Math.min(referenceImage.getWidth(), referenceImage.getHeight()) / COMPARE_SIZE / 4));
+    }
+
+    /**
+     * The constructor, which creates the GUI and start the image processing task.
+     */
     public ImageSimilarity(BufferedImage referenceImage, int sampleSize) throws IOException {
         this.referenceImage = referenceImage;
-        if (referenceImage.getWidth() * prop[0] - sampleSize < 0 ||
-            referenceImage.getWidth() * prop[4] + sampleSize > referenceImage.getWidth()) {
-            throw new IllegalArgumentException("sample size is too big for the image.");
+        if (referenceImage.getWidth() * prop(0) < sampleSize) {
+            LOGGER.warn("Max: {}", referenceImage.getWidth() * prop(0));
+            throw new IllegalArgumentException(String.format("sample width is too big for the image " +
+                    "(width: %s, sampleSize: %s).", referenceImage.getWidth(), sampleSize));
         }
-        if (referenceImage.getHeight() * prop[0] - sampleSize < 0 ||
-            referenceImage.getHeight() * prop[4] + sampleSize > referenceImage.getHeight()) {
-            throw new IllegalArgumentException("sample size is too big for the image.");
+        if (referenceImage.getHeight() * prop(0) < sampleSize) {
+            LOGGER.warn("Max: {}", referenceImage.getHeight() * prop(0));
+            throw new IllegalArgumentException(String.format("sample height is too big for the image " +
+                    "(width: %s, sampleSize: %s).", referenceImage.getHeight(), sampleSize));
         }
         this.sampleSize = sampleSize;
 
@@ -75,12 +91,12 @@ public final class ImageSimilarity {
      */
     private Color[][] calcSignature(BufferedImage i) {
         // Get memory for the signature.
-        Color[][] sig = new Color[5][5];
+        Color[][] sig = new Color[COMPARE_SIZE][COMPARE_SIZE];
         // For each of the 25 signature values average the pixels around it.
         // Note that the coordinate of the central pixel is in proportions.
-        for (int x = 0; x < 5; x++) {
-            for (int y = 0; y < 5; y++) {
-                sig[x][y] = averageAround(i, prop[x], prop[y]);
+        for (int x = 0; x < COMPARE_SIZE; x++) {
+            for (int y = 0; y < COMPARE_SIZE; y++) {
+                sig[x][y] = averageAround(i, prop(x), prop(y));
             }
         }
         return sig;
@@ -100,9 +116,11 @@ public final class ImageSimilarity {
         int numPixels = 0;
         // Sample the pixels.
 
-        for (double x = px * i.getWidth() - sampleSize; x < px * i.getWidth() + sampleSize; x++) {
-            for (double y = py * i.getHeight() - sampleSize; y < py * i.getHeight() + sampleSize; y++) {
-                iterator.getPixel((int) x, (int) y, pixel);
+        int pxwi = (int) Math.round(px * i.getWidth());
+        int pyhi = (int) Math.round(py * i.getHeight());
+        for (int x = pxwi - sampleSize; x < pxwi + sampleSize; x++) {
+            for (int y = pyhi - sampleSize; y < pyhi + sampleSize; y++) {
+                iterator.getPixel(x, y, pixel);
                 accum[0] += pixel[0];
                 accum[1] += pixel[1];
                 accum[2] += pixel[2];
@@ -113,7 +131,7 @@ public final class ImageSimilarity {
         accum[0] /= numPixels;
         accum[1] /= numPixels;
         accum[2] /= numPixels;
-        return new Color((int) accum[0], (int) accum[1], (int) accum[2]);
+        return new Color((int) Math.round(accum[0]), (int) Math.round(accum[1]), (int) Math.round(accum[2]));
     }
 
     /**
@@ -128,8 +146,8 @@ public final class ImageSimilarity {
         // we will calculate the sum of the distances between the RGB values of
         // pixels in the same positions.
         double dist = 0;
-        for (int x = 0; x < 5; x++) {
-            for (int y = 0; y < 5; y++) {
+        for (int x = 0; x < COMPARE_SIZE; x++) {
+            for (int y = 0; y < COMPARE_SIZE; y++) {
                 int r1 = this.signature[x][y].getRed();
                 int g1 = this.signature[x][y].getGreen();
                 int b1 = this.signature[x][y].getBlue();
@@ -140,6 +158,9 @@ public final class ImageSimilarity {
                 dist += tempDist;
             }
         }
+        // Normalise with the previus calculation
+        dist = dist * COMPARE_SIZE * COMPARE_SIZE / 25;
+        LOGGER.warn("Current distance: {}", dist);
         return dist;
     }
 
@@ -206,7 +227,7 @@ public final class ImageSimilarity {
      * @param width the graphic width (required for svg files)
      * @param height the graphic height (required for svg files)
      * @return a single graphic
-     * @throws TranscoderException
+     * @throws IOException, TranscoderException
      */
     public static BufferedImage mergeImages(List<URI> graphicFiles, int width, int height)
             throws IOException, TranscoderException {
@@ -282,7 +303,7 @@ public final class ImageSimilarity {
     }
 
     public static void main(String args[]) throws IOException {
-        final String path = "C:\\GitHub\\mapfish-printV3\\core\\src\\test\\resources\\map-data";
+        final String path = "core/src/test/resources/map-data";
         final File root = new File(path);
         final FluentIterable<File> files = Files.fileTreeTraverser().postOrderTraversal(root);
         for (File file : files) {

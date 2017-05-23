@@ -246,7 +246,7 @@ public class ExamplesTest {
                             String similarityString = Files.toString(file, Constants.DEFAULT_CHARSET);
                             similarity = Integer.parseInt(similarityString.trim());
                         }
-                        new ImageSimilarity(image, 50).assertSimilarity(expectedOutput, similarity);
+                        new ImageSimilarity(image).assertSimilarity(expectedOutput, similarity);
                     }
                 } catch (Throwable e) {
                     errors.put(example.getName() + " (" + requestFile.getName() + ")", e);
