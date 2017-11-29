@@ -204,9 +204,10 @@ public class WMSMapReader extends TileableMapReader {
             URIUtils.setParamDefault(result, "TRANSPARENT", "true");
         }
         URIUtils.setParamDefault(result, "STYLES", StringUtils.join(styles, ","));
-        URIUtils.setParamDefault(result, "format_options", "dpi:" + transformer.getDpi()); // For GeoServer
-        URIUtils.setParamDefault(result, "map_resolution", String.valueOf(transformer.getDpi())); // For MapServer
-        URIUtils.setParamDefault(result, "DPI", String.valueOf(transformer.getDpi())); // For QGIS mapserver
+        // ESRI server do not like these parameters, so do not add them by default
+        // URIUtils.setParamDefault(result, "format_options", "dpi:" + transformer.getDpi()); // For GeoServer
+        // URIUtils.setParamDefault(result, "map_resolution", String.valueOf(transformer.getDpi())); // For MapServer
+        // URIUtils.setParamDefault(result, "DPI", String.valueOf(transformer.getDpi())); // For QGIS mapserver
 
     }
     @Override
