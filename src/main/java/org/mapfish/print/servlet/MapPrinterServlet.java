@@ -360,8 +360,11 @@ public class MapPrinterServlet extends BaseMapServlet {
 
             final OutputFormat outputFormat = mapPrinter.getOutputFormat(specJson);
             // create a temporary file that will contain the PDF
-            final File tempJavaFile = File.createTempFile(TEMP_FILE_PREFIX,
-                    "." + outputFormat.getFileSuffix() + TEMP_FILE_SUFFIX, getTempDir());
+            Date date = new Date() ;
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMddHHmmssSSS") ;
+            String tempName =  TEMP_FILE_PREFIX + dateFormat.format(date) +  "." + outputFormat.getFileSuffix() + TEMP_FILE_SUFFIX;
+            String joinedPath = new File(getTempDir() , tempName).toString();
+            final File tempJavaFile  = new File( joinedPath ) ;
             TempFile tempFile = new TempFile(tempJavaFile, specJson, outputFormat);
 
             FileOutputStream out = null;
