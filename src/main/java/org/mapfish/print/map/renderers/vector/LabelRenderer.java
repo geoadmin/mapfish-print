@@ -36,6 +36,22 @@ public class LabelRenderer {
 
     public static final Logger LOGGER = Logger.getLogger(LabelRenderer.class);
 
+    static void drawText(PdfContentByte dc, String[] labels, Coordinate center,
+            float labelXOffset, float labelYOffset, String labelAlign, float f, float fontHeight) {
+
+        dc.beginText();
+        dc.setTextMatrix((float) center.x + labelXOffset * f, (float) center.y + labelYOffset * f);
+        for (int i = 0; i < labels.length; i++){
+            dc.showTextAligned(
+                    PDFUtils.getHorizontalAlignment(labelAlign),
+                    labels[i],
+                    (float) center.x + labelXOffset * f,
+                    (float) center.y + labelYOffset * f
+                        - PDFUtils.getVerticalOffset(labelAlign, fontHeight) - ((PDFUtils.getVerticalOffset(labelAlign, fontHeight)+2)*i), 0);
+        }
+        dc.endText();
+    }
+
     static void applyStyle(RenderingContext context, PdfContentByte dc,
             PJsonObject style, Geometry geometry, AffineTransform affineTransform) {
         /*
@@ -53,11 +69,13 @@ public class LabelRenderer {
             float labelXOffset = style.optFloat("labelXOffset", (float) 0.0);
             float labelYOffset = style.optFloat("labelYOffset", (float) 0.0);
             String fontColor = style.optString("fontColor", "#000000");
+            String labelOutlineColor = style.optString("labelOutlineColor", null);
+            float labelOutlineWidth = style.optFloat("labelOutlineWidth", (float) 1.0);
             /* Supported itext fonts: COURIER, HELVETICA, TIMES_ROMAN */
             String fontFamily = style.optString("fontFamily", "HELVETICA");
             if (!"COURIER".equalsIgnoreCase(fontFamily)
-                    || !"HELVETICA".equalsIgnoreCase(fontFamily)
-                    || !"TIMES_ROMAN".equalsIgnoreCase(fontFamily)) {
+                    && !"HELVETICA".equalsIgnoreCase(fontFamily)
+                    && !"TIMES_ROMAN".equalsIgnoreCase(fontFamily)) {
 
                 LOGGER.info("Font: '"+ fontFamily +
                         "' not supported, supported fonts are 'HELVETICA', " +
@@ -71,29 +89,24 @@ public class LabelRenderer {
             Coordinate center = geometry.getCentroid().getCoordinate();
             center = GeometriesRenderer.transformCoordinate(center, affineTransform);
             float f = context.getStyleFactor();
-            BaseFont bf = PDFUtils
-                    .getBaseFont(fontFamily, fontSize, fontWeight);
-            float fontHeight = (float) Double.parseDouble(fontSize
-                    .toLowerCase().replaceAll("px", "")) * f;
+            BaseFont bf = PDFUtils.getBaseFont(fontFamily, fontSize, fontWeight);
+            float fontHeight = (float) Double.parseDouble(fontSize.toLowerCase().replaceAll("px", "")) * f;
             dc.setFontAndSize(bf, fontHeight);
-            dc.setColorFill(ColorWrapper.convertColor(fontColor));
-            dc.beginText();
-            dc.setTextMatrix((float) center.x + labelXOffset * f,
-                (float) center.y + labelYOffset * f);
-            for (int i = 0; i < labels.length; i++){
-                dc.showTextAligned(
-		                    PDFUtils.getHorizontalAlignment(labelAlign),
-		                    labels[i],
-		                    (float) center.x + labelXOffset * f,
-		                    (float) center.y
-		                            + labelYOffset
-		                            * f
-		                            - PDFUtils
-		                                    .getVerticalOffset(labelAlign, fontHeight) - ((PDFUtils.getVerticalOffset(labelAlign, fontHeight)+2)*i),
-		                    0);
-	            
+            dc.setCharacterSpacing((float)1.0);
+
+            // Add text's stroke
+            if (labelOutlineColor != null) {
+              dc.saveState();
+              dc.setTextRenderingMode(PdfContentByte.TEXT_RENDER_MODE_STROKE);
+              dc.setLineWidth(labelOutlineWidth);
+              dc.setColorStroke(ColorWrapper.convertColor(labelOutlineColor));
+              LabelRenderer.drawText(dc, labels, center, labelXOffset, labelYOffset, labelAlign, f, fontHeight);
+              dc.restoreState();
             }
-            dc.endText();
+            
+            // Add text
+            dc.setColorFill(ColorWrapper.convertColor(fontColor));
+            LabelRenderer.drawText(dc, labels, center, labelXOffset, labelYOffset, labelAlign, f, fontHeight);
         }
     }
 }
